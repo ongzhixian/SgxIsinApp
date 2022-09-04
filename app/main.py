@@ -161,6 +161,23 @@ def get_cloudamqp_url_parameters():
     return pika.URLParameters(cloud_amqp_url)
 
 
+def get_mysql_settings():
+    if len(sys.argv) < 4:
+        print("ERROR - Require output file path as third argument")
+        exit(1)
+
+    full_path = path.abspath(sys.argv[3])
+    
+    if not path.exists(full_path):
+        print(f"ERROR - output path does not exists {full_path}")
+        exit(2)
+
+    with open(full_path, 'r', encoding='utf-8') as in_file:
+        mysql_settings = json.loads(in_file.read())
+    breakpoint()
+    return mysql_settings
+
+
 def setup_logging():
     logging.getLogger('pika').setLevel(logging.WARNING)
     log = Logger()
@@ -171,8 +188,17 @@ if __name__ == "__main__":
     log = setup_logging()
     url_parameters = get_cloudamqp_url_parameters()
     output_path = get_output_file_path()
-    sgx_isin_data = download_sgx_instrument_list(output_path)
-    ticker_list = get_tickers_from_instrument_list(sgx_isin_data)
+    mysql_settings = get_mysql_settings()
+
+    # sgx_isin_data = download_sgx_instrument_list(output_path)
+    # ticker_list = get_tickers_from_instrument_list(sgx_isin_data)
     # filter ticker_list with blacklist
-    publish_tickers(url_parameters, ticker_list)
+    # publish_tickers(url_parameters, ticker_list)
+    from data_providers import MySqlDataProvider
+    mysql = MySqlDataProvider()
+    mysql_settings['MYSQL']['']
+    # settings_path = '/mnt/secrets/mysql/.mysql-settings.json'
+    # with open(settings_path, 'r', encoding='utf-8') as in_file:
+    #     jj = json.loads(in_file.read())
+    # print(jj)
     log.info("Program complete", source="program", event="complete")

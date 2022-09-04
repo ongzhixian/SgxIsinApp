@@ -12,10 +12,17 @@
     "rabbit_mq": {
         "sgx-isin":
         {
-            "secrets_file_path": "",
             "exchange_name": "",
             "routing_key": "",
             "queue_name": ""
         }
-    }
+    },
+    "mysql" : {
+		"dev_forum": {
+			"HOST"	   : "172.31.163.117",
+			"PORT"	   : 3306,
+			"DATABASE" : "forum",
+			"USERNAME" : "root"
+		}
+	}
 }
