@@ -19,6 +19,7 @@ import re
 
 import pika
 from logger import Logger
+from data_providers import MySqlDataProvider
 
 
 EXCHANGE_NAME = 'financial_instrument'
@@ -60,10 +61,12 @@ def publish_tickers(url_parameters, ticker_list):
             log.info(f"Publish {ticker}", event="publish", type="ticker", target=ticker)
         
 
-def get_tickers_from_instrument_list(sgx_isin_data):
+def  get_tickers_from_instrument_list(sgx_isin_data):
     # log.info("Parse SGX instrument list", source="program", event="parse", target="ticker", data_source="SGX instrument list")
     # return ['BN4', 'C09']
+    # sql = 'INSERT INTO `instrument` (mic, code, name, counter, isin) VALUES (?, ?, ?, ?, ?)'
     ticker_list = []
+    instrument_list = []
     sgx_isin_layout = r"(?P<name>.{50})(?P<status>.{10})(?P<isin>.{20})(?P<code>.{10})(?P<counter>.+)"
     
     isin_line_list = sgx_isin_data.splitlines()
@@ -77,6 +80,15 @@ def get_tickers_from_instrument_list(sgx_isin_data):
         
         code = match_result.group('code').strip()
         ticker_list.append(code)
+        instrument_list.append(
+            (
+                'XSGX', 
+                match_result.group('code').strip(),
+                match_result.group('name').strip(),
+                match_result.group('counter').strip(),
+                match_result.group('isin').strip()
+            )
+        )
     
     logging.info(f"Tickers from SGX: {len(ticker_list)}")
     # return ticker_list
@@ -161,7 +173,7 @@ def get_cloudamqp_url_parameters():
     return pika.URLParameters(cloud_amqp_url)
 
 
-def get_mysql_settings():
+def get_database_settings():
     if len(sys.argv) < 4:
         print("ERROR - Require output file path as third argument")
         exit(1)
@@ -174,7 +186,6 @@ def get_mysql_settings():
 
     with open(full_path, 'r', encoding='utf-8') as in_file:
         mysql_settings = json.loads(in_file.read())
-    breakpoint()
     return mysql_settings
 
 
@@ -186,17 +197,24 @@ def setup_logging():
 
 if __name__ == "__main__":
     log = setup_logging()
+    # Takes 3 arguments: .cloud-amqp.json output-path .mysql.json
     url_parameters = get_cloudamqp_url_parameters()
     output_path = get_output_file_path()
-    mysql_settings = get_mysql_settings()
+    database_settings = get_database_settings()
 
-    # sgx_isin_data = download_sgx_instrument_list(output_path)
-    # ticker_list = get_tickers_from_instrument_list(sgx_isin_data)
+    sgx_isin_data = download_sgx_instrument_list(output_path)
+    ticker_list = get_tickers_from_instrument_list(sgx_isin_data)
     # filter ticker_list with blacklist
     # publish_tickers(url_parameters, ticker_list)
-    from data_providers import MySqlDataProvider
-    mysql = MySqlDataProvider()
-    mysql_settings['MYSQL']['']
+    # from data_providers import MySqlDataProvider
+    mysql = MySqlDataProvider(database_settings['financial'])
+    # NAME                                              STATUS    ISIN CODE           CODE      TRADING COUNTER NAME
+    sql = 'INSERT INTO `instrument` (mic, code, name, counter, isin) VALUES (?, ?, ?, ?, ?)'
+    data_rows = [
+        ('asd',)
+    ]
+    mysql.execute_batch(sql, data_rows)
+    
     # settings_path = '/mnt/secrets/mysql/.mysql-settings.json'
     # with open(settings_path, 'r', encoding='utf-8') as in_file:
     #     jj = json.loads(in_file.read())
