@@ -1,0 +1,51 @@
+# Run one of the following to run
+# kubectl run alpine-sh --rm -it --image=alpine:3.16 -- sh
+# kubectl run -i --rm --tty debug --image=alpine:3.16 --restart=Never -- sh
+# kubectl exec pp -it -- bash
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pp
+spec:
+  terminationGracePeriodSeconds: 0
+  volumes:
+  - name: cloud-amqp-secret
+    secret:
+      secretName: cloud-amqp-secret
+      items:
+      - key: .cloudampq.json
+        path: .cloudampq.json
+      optional: false # default setting; "mysecret" must exist
+  - name: mysql-settings-secret
+    secret:
+      secretName: mysql-settings-secret
+      items:
+      - key: .pythonanywhere.json
+        path: .mysql-settings.json
+      optional: false # default setting; "mysecret" must exist
+  - name: sgx-yafi-fileshare
+    persistentVolumeClaim:
+      claimName: generic-128mi-pvc
+  containers:
+  - image: mysql:5.7
+    name: mysql57
+    resources:
+      limits:
+        cpu: 100m     # the CPU limit is define in milicore (m)
+        memory: 100Mi # the Memory is define in Mebibytes (Mi)
+    env:
+    - name: MYSQL_ROOT_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: mysql-secret
+          key: PASSWORD
+    volumeMounts:
+    - name: cloud-amqp-secret
+      mountPath: "/mnt/secrets/cloud-amqp"
+      readOnly: true
+    - name: mysql-settings-secret
+      mountPath: "/mnt/secrets/mysql"
+      readOnly: true
+    - name: sgx-yafi-fileshare
+      mountPath: /usr/share/sql-scripts
+    command: [ '/bin/bash', '-c', 'sleep inf' ]
