@@ -1,6 +1,6 @@
 import argparse
 import json
-from os import path
+from os import path, makedirs
 
 import pika
 
@@ -83,8 +83,11 @@ def get_save_file_full_path(directory_path):
     full_path = path.abspath(directory_path)
     
     if not path.exists(full_path):
-        log.error(f"ERROR - output path does not exists {full_path}")
-        exit(2)
+        try:
+            makedirs(full_path)
+        except Exception:
+            log.error(f"ERROR - output path does not exists {full_path}")
+            exit(2)
 
     return full_path
 

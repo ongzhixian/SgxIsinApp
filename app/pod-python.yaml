@@ -16,14 +16,14 @@ spec:
       - key: .cloudampq.json
         path: .cloudampq.json
       optional: false # default: false (secret must exist)
-  - name: mysql-settings-secret
+  - name: database-config-secret
     secret:
-      secretName: mysql-settings-secret
+      secretName: database-config-secret
       items:
-      - key: .pythonanywhere.json
-        path: .mysql-settings.json
+      - key: .database-config.json
+        path: .database-config.json
       optional: false # default: false (secret must exist)
-  - name: sgx-yafi-fileshare
+  - name: generic-128mi-fileshare
     persistentVolumeClaim:
       claimName: generic-128mi-pvc
   containers:
@@ -33,18 +33,13 @@ spec:
       limits:
         cpu: 100m     # the CPU limit is define in milicore (m)
         memory: 100Mi # the Memory is define in Mebibytes (Mi)
-    env:
-    - name: MYSQL_ROOT_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: mysql-secret
-          key: PASSWORD
     volumeMounts:
     - name: cloud-amqp-secret
-      mountPath: "/mnt/secrets/cloud-amqp"
+      mountPath: "/mnt/secrets/amqp"
       readOnly: true
-    - name: mysql-settings-secret
-      mountPath: "/mnt/secrets/mysql"
+    - name: database-config-secret
+      mountPath: "/mnt/secrets/database"
       readOnly: true
-    - name: sgx-yafi-fileshare
-      mountPath: /usr/share/yafi
+    - name: generic-128mi-fileshare
+      mountPath: /usr/share/generic-128mi
+    command: [ '/bin/bash', '-c', 'sleep inf' ]

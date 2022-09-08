@@ -23,7 +23,7 @@ spec:
       - key: .pythonanywhere.json
         path: .mysql-settings.json
       optional: false # default setting; "mysecret" must exist
-  - name: sgx-yafi-fileshare
+  - name: generic-128mi-fileshare
     persistentVolumeClaim:
       claimName: generic-128mi-pvc
   containers:
@@ -46,6 +46,6 @@ spec:
     - name: mysql-settings-secret
       mountPath: "/mnt/secrets/mysql"
       readOnly: true
-    - name: sgx-yafi-fileshare
-      mountPath: /usr/share/sql-scripts
+    - name: generic-128mi-fileshare
+      mountPath: /usr/share/generic-128mi
     command: [ '/bin/bash', '-c', 'sleep inf' ]
