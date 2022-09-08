@@ -18,14 +18,20 @@ from urllib.request import Request as url_request
 import re
 
 import pika
+
 from logger import Logger
 from data_providers import MySqlDataProvider
+from program_arguments import get_settings_from_arguments
 
 
 EXCHANGE_NAME = 'financial_instrument'
 ROUTING_KEY = "yafi.fetch"
 QUEUE_NAME = 'yafi_fetch'
 
+def setup_logging():
+    logging.getLogger('pika').setLevel(logging.WARNING)
+    log = Logger()
+    return log
 
 def setup_rabbit_mq(channel):
     channel.exchange_declare(
@@ -61,10 +67,15 @@ def publish_tickers(url_parameters, ticker_list):
             log.info(f"Publish {ticker}", event="publish", type="ticker", target=ticker)
         
 
-def  get_tickers_from_instrument_list(sgx_isin_data):
-    # log.info("Parse SGX instrument list", source="program", event="parse", target="ticker", data_source="SGX instrument list")
-    # return ['BN4', 'C09']
-    # sql = 'INSERT INTO `instrument` (mic, code, name, counter, isin) VALUES (?, ?, ?, ?, ?)'
+def get_instrument_code_list(sgx_isin_data_rows):
+    return ['BN4', 'C09']
+    instrument_code_list = [ x[1] for x in sgx_isin_data_rows ]
+    return instrument_code_list
+    
+
+def parse_to_data_rows(sgx_isin_data):
+    """Parse contents of the file into records of instrument (instrument_list)"""
+    market_identifier_id = 'XSES'
     ticker_list = []
     instrument_list = []
     sgx_isin_layout = r"(?P<name>.{50})(?P<status>.{10})(?P<isin>.{20})(?P<code>.{10})(?P<counter>.+)"
@@ -82,17 +93,14 @@ def  get_tickers_from_instrument_list(sgx_isin_data):
         ticker_list.append(code)
         instrument_list.append(
             (
-                'XSGX', 
+                market_identifier_id, 
                 match_result.group('code').strip(),
                 match_result.group('name').strip(),
                 match_result.group('counter').strip(),
                 match_result.group('isin').strip()
             )
         )
-    
-    logging.info(f"Tickers from SGX: {len(ticker_list)}")
-    # return ticker_list
-    return ['BN4', 'C09']
+    return instrument_list
 
 
 def save_sgx_isin_to_file(data):
@@ -129,94 +137,53 @@ def download_sgx_instrument_list(output_path=None):
     return sgx_isin_data
 
 
-def get_output_file_path():
-    if len(sys.argv) < 3:
-        print("ERROR - Require output file path as second argument")
-        exit(1)
-
-    full_path = path.abspath(sys.argv[2])
-    
-    if not path.exists(full_path):
-        print(f"ERROR - output path does not exists {full_path}")
-        exit(2)
-
-    return full_path
-
-
-def get_cloudamqp_url_parameters():
-        
-    if len(sys.argv) < 1:
-        exit(1)
-    
-    full_path = path.abspath(sys.argv[1])
-    
-    if not path.exists(full_path):
-        exit(2)
-    
-    try:
-        with open(full_path, "r", encoding="utf-8") as in_file:
-            json_data = json.load(in_file)
-    except Exception:
-        exit(3)
-    
-    if 'cloud_amqp' not in json_data:
-        exit(4)
-    if 'armadillo' not in json_data['cloud_amqp']:
-        exit(4)
-    if 'url' not in json_data['cloud_amqp']['armadillo']:
-        exit(4)
-    
-    cloud_amqp_url = json_data['cloud_amqp']['armadillo']['url']
-
-    log.info("Cloud AMQP URL read", source="program", event="set", target="cloud amqp url")
-    
-    return pika.URLParameters(cloud_amqp_url)
+def store_sgx_isin_to_database(sgx_isin_data_rows):
+    mysql = MySqlDataProvider(database_settings['financial'])
+    sql = """
+INSERT INTO instrument (market_identifier_id, code, name, counter, isin)
+SELECT  %s      AS 'market_identifier_id'
+        , %s    AS 'code'
+        , %s    AS 'name'
+        , %s    AS 'counter'
+        , %s    AS 'isin' 
+FROM    (SELECT 1) a
+WHERE NOT EXISTS (SELECT 1 FROM instrument WHERE market_identifier_id = %s AND code = %s)
+LIMIT 1;
+"""
+    data_rows = [(x[0], x[1], x[2], x[3], x[4], x[0], x[1]) for x in sgx_isin_data_rows]
+    (rows_affected, errors) = mysql.execute_batch(sql, data_rows)
+    log.info("Rows affected {rows_affected}")
 
 
-def get_database_settings():
-    if len(sys.argv) < 4:
-        print("ERROR - Require output file path as third argument")
-        exit(1)
-
-    full_path = path.abspath(sys.argv[3])
-    
-    if not path.exists(full_path):
-        print(f"ERROR - output path does not exists {full_path}")
-        exit(2)
-
-    with open(full_path, 'r', encoding='utf-8') as in_file:
-        mysql_settings = json.loads(in_file.read())
-    return mysql_settings
+def get_blacklisted_code_list():
+    """Fetch codes of blacklisted instruments"""
+    mysql = MySqlDataProvider(database_settings['financial'])
+    sql = """
+SELECT code FROM instrument WHERE exclusion_id IS NOT NULL AND market_identifier_id = %s;
+"""
+    blacklisted_record_list = mysql.fetch_record_set(sql, ('XSES',))
+    blacklisted_code_list = [x[0] for x in blacklisted_record_list]
+    return blacklisted_code_list
 
 
-def setup_logging():
-    logging.getLogger('pika').setLevel(logging.WARNING)
-    log = Logger()
-    return log
+def remove_blacklisted_instrument_codes(instrument_code_list):
+    blacklisted_code_list = get_blacklisted_code_list()
+    filtered_instrument_code_list = [code for code in instrument_code_list if code not in blacklisted_code_list]
+    return filtered_instrument_code_list
 
 
 if __name__ == "__main__":
     log = setup_logging()
-    # Takes 3 arguments: .cloud-amqp.json output-path .mysql.json
-    url_parameters = get_cloudamqp_url_parameters()
-    output_path = get_output_file_path()
-    database_settings = get_database_settings()
-
+    (url_parameters, database_settings, output_path) = get_settings_from_arguments()
     sgx_isin_data = download_sgx_instrument_list(output_path)
-    ticker_list = get_tickers_from_instrument_list(sgx_isin_data)
-    # filter ticker_list with blacklist
-    # publish_tickers(url_parameters, ticker_list)
-    # from data_providers import MySqlDataProvider
-    mysql = MySqlDataProvider(database_settings['financial'])
-    # NAME                                              STATUS    ISIN CODE           CODE      TRADING COUNTER NAME
-    sql = 'INSERT INTO `instrument` (mic, code, name, counter, isin) VALUES (?, ?, ?, ?, ?)'
-    data_rows = [
-        ('asd',)
-    ]
-    mysql.execute_batch(sql, data_rows)
+    sgx_isin_data_rows = parse_to_data_rows(sgx_isin_data)
+
+    # Part 1 -- Store to database part
+    store_sgx_isin_to_database(sgx_isin_data_rows)
+
+    # Part 2 -- Publishing
+    instrument_code_list = get_instrument_code_list(sgx_isin_data_rows)
+    filtered_instrument_code_list = remove_blacklisted_instrument_codes(instrument_code_list)
+    publish_tickers(url_parameters, filtered_instrument_code_list)
     
-    # settings_path = '/mnt/secrets/mysql/.mysql-settings.json'
-    # with open(settings_path, 'r', encoding='utf-8') as in_file:
-    #     jj = json.loads(in_file.read())
-    # print(jj)
     log.info("Program complete", source="program", event="complete")
