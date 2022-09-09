@@ -23,6 +23,11 @@ from logger import Logger
 from data_providers import MySqlDataProvider
 from program_arguments import get_settings_from_arguments
 
+# TODO: to revise exchange name, routing key and queue name as follow:
+# financial_instrument
+# └───fetch.yahoo-finance.price
+#     └───fetch_yahoo_finance_price
+
 
 EXCHANGE_NAME = 'financial_instrument'
 ROUTING_KEY = "yafi.fetch"
