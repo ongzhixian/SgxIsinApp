@@ -1,9 +1,4 @@
 import logging
-# from os import environ, path, walk
-# from sqlite3 import connect
-
-# from forum_app import app_secrets, app_path
-# from forum_app.databases import BaseDataProviderInterface
 
 import mysql.connector
 
