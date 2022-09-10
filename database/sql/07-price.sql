@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS `price` (
     `cre_dt` 				DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(),
     `upd_dt` 				DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(),
     PRIMARY KEY (`id`),
-    UNIQUE INDEX `rationale_u_idx` (`rationale`)
+    UNIQUE INDEX `price_u_idx` (`trade_date`, `market_identifier_id`, `code`)
 )
 COLLATE='utf8mb4_unicode_ci'
 ;
